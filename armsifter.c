@@ -124,7 +124,7 @@ int main(int argc, char * argv[]) {
         pos_start = 0xffffffff;
     }
 
-    printf("Starting at position: %x - %s\n", pos_start, position_value);
+    printf("Starting at position: %x\nEnding at position: %x\n", pos_start, pos_end);
     
     for (unsigned int i = pos_start; i > pos_end; i--) {
         if (i % 256 == 0){
@@ -163,6 +163,7 @@ int main(int argc, char * argv[]) {
         }
     }   
     
+    printf("Ending run\n");
     close(template);
     free(to_exec);
     return 0;
