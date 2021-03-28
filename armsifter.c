@@ -55,12 +55,12 @@ int main(int argc, char * argv[]) {
     int status;
     char *addr;
     int template;
-    unsigned int pos;
+    unsigned int pos_start;
+    unsigned int pos_end;
     char position_value[9];
     int mem_holder;
     char * to_exec;
     to_exec = malloc(32);
-    char trial_value[5];
     pid_t child;
     struct stat st;
     status = stat("./hello", &st);
@@ -109,19 +109,24 @@ int main(int argc, char * argv[]) {
 
     sprintf(position_value, "%02X%02X%02X%02X", addr[idx+3], addr[idx+2], addr[idx+1], addr[idx]);
 
-    pos = strtoul(position_value, NULL, 16);
+    pos_start = strtoul(position_value, NULL, 16);
+
+    pos_end = 0;
 
     if (argv[1]) {
-        pos = strtoul(argv[1], NULL, 16);
+        pos_start = strtoul(argv[1], NULL, 16);
+        if (arvg[2]) {
+            pos_end = strtoul(argv[2], NULL, 16);
+        }
     }
 
-    if (pos == 0) {
-        pos = 0xffffffff;
+    if (pos_start == 0) {
+        pos_start = 0xffffffff;
     }
 
-    printf("Starting at position: %x - %s\n", pos, position_value);
+    printf("Starting at position: %x - %s\n", pos_start, position_value);
     
-    for (unsigned int i = pos; i > 0; i--) {
+    for (unsigned int i = pos_start; i > pos_end; i--) {
         if (i % 256 == 0){
             printf("\rNow Executing: %x", i);
         }
