@@ -120,10 +120,6 @@ int main(int argc, char * argv[]) {
         }
     }
 
-    if (pos_start == 0) {
-        pos_start = 0xffffffff;
-    }
-
     printf("Starting at position: %x\nEnding at position: %x\n", pos_start, pos_end);
     
     for (unsigned int i = pos_start; i > pos_end; i--) {
