@@ -115,7 +115,7 @@ int main(int argc, char * argv[]) {
 
     if (argv[1]) {
         pos_start = strtoul(argv[1], NULL, 16);
-        if (arvg[2]) {
+        if (argv[2]) {
             pos_end = strtoul(argv[2], NULL, 16);
         }
     }
