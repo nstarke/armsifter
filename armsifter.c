@@ -15,6 +15,11 @@
 
 #define IDX_FILE "start_idx"
 
+unsigned int deny_list[] = { 
+    0xebfffffe, 
+    0x5ffffffe 
+};
+
 int find_index(char *data, size_t len) {
     size_t j = (len + (2 - 1)) / 2;
     // Magic OPCODE: e3a01000
@@ -125,6 +130,19 @@ int main(int argc, char * argv[]) {
     for (unsigned int i = pos_start; i > pos_end; i--) {
         if (i % 256 == 0){
             printf("\rNow Executing: %x", i);
+        }
+
+        int found = 0;
+        for (int j = 0; j < sizeof(deny_list) / sizeof(int); j++ ) {
+            if (i == deny_list[j]) {
+                printf("Deny List: %x\n", deny_list[j]);
+                found = 1;
+                break;
+            }
+        }
+
+        if (found == 1) {
+            continue;
         }
 
         child = fork();
