@@ -45,7 +45,6 @@ int check_idx_file() {
     } else {
         return -1;
     }
-    
 }
 
 int write_idx_file(unsigned int idx) {
@@ -56,18 +55,33 @@ int write_idx_file(unsigned int idx) {
 }
 
 int main(int argc, char * argv[]) {
+    int c;
     int idx;
     int status;
     char *addr;
     int template;
-    unsigned int pos_start;
-    unsigned int pos_end;
+    unsigned int pos_start = 0;
+    unsigned int pos_end = 0;
     char position_value[9];
     int mem_holder;
     char * to_exec;
     to_exec = malloc(32);
     pid_t child;
     struct stat st;
+
+    while ((c = getopt (argc, argv, "s:e:")) != -1) {
+        switch (c) {
+            case 's':
+                pos_start = strtoul(optarg, NULL, 16);
+                break;
+            case 'e':
+                pos_end = strtoul(optarg, NULL, 16);
+                break;
+            default:
+                exit(1);
+        }
+    }
+
     status = stat("./hello", &st);
 
     if (status != 0) {
@@ -114,20 +128,14 @@ int main(int argc, char * argv[]) {
 
     sprintf(position_value, "%02X%02X%02X%02X", addr[idx+3], addr[idx+2], addr[idx+1], addr[idx]);
 
-    pos_start = strtoul(position_value, NULL, 16);
-
-    pos_end = 0xffffffff;
-
-    if (argv[1]) {
-        pos_start = strtoul(argv[1], NULL, 16);
-        if (argv[2]) {
-            pos_end = strtoul(argv[2], NULL, 16);
-        }
+    if (pos_start == 0 && pos_end == 0) {
+        pos_start = strtoul(position_value, NULL, 16);
+        pos_end = 0xffffffff;
     }
 
     printf("Starting at position: %x\nEnding at position: %x\n", pos_start, pos_end);
     
-    for (unsigned int i = pos_start; i > pos_end; i++) {
+    for (unsigned int i = pos_start; i < pos_end; i++) {
         if (i % 256 == 0){
             printf("\rNow Executing: %x", i);
         }
