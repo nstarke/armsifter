@@ -116,7 +116,7 @@ int main(int argc, char * argv[]) {
 
     pos_start = strtoul(position_value, NULL, 16);
 
-    pos_end = 0;
+    pos_end = 0xffffffff;
 
     if (argv[1]) {
         pos_start = strtoul(argv[1], NULL, 16);
@@ -127,7 +127,7 @@ int main(int argc, char * argv[]) {
 
     printf("Starting at position: %x\nEnding at position: %x\n", pos_start, pos_end);
     
-    for (unsigned int i = pos_start; i > pos_end; i--) {
+    for (unsigned int i = pos_start; i > pos_end; i++) {
         if (i % 256 == 0){
             printf("\rNow Executing: %x", i);
         }
