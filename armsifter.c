@@ -17,7 +17,7 @@
 
 unsigned int deny_list[] = { 
     0xebfffffe, 
-    0x5ffffffe 
+    0xabfffffe 
 };
 
 int find_index(char *data, size_t len) {
