@@ -58,6 +58,8 @@ int main(int argc, char * argv[]) {
     int c;
     int idx;
     int status;
+    int start_provided = 0;
+    int end_provied = 0;
     char *addr;
     int template;
     unsigned int pos_start = 0;
@@ -72,9 +74,11 @@ int main(int argc, char * argv[]) {
     while ((c = getopt (argc, argv, "s:e:")) != -1) {
         switch (c) {
             case 's':
+                start_provided = 1;
                 pos_start = strtoul(optarg, NULL, 16);
                 break;
             case 'e':
+                end_provied = 1;
                 pos_end = strtoul(optarg, NULL, 16);
                 break;
             default:
@@ -128,8 +132,11 @@ int main(int argc, char * argv[]) {
 
     sprintf(position_value, "%02X%02X%02X%02X", addr[idx+3], addr[idx+2], addr[idx+1], addr[idx]);
 
-    if (pos_start == 0 && pos_end == 0) {
+    if (start_provided == 0) {
         pos_start = strtoul(position_value, NULL, 16);
+    }
+
+    if (end_provied == 0) {
         pos_end = 0xffffffff;
     }
 
