@@ -225,7 +225,7 @@ int main(int argc, char * argv[]) {
                     return 1;
                 }
                
-                memcpy(addr + 0x54, &i, 4);
+                memcpy(addr + idx, &i, 4);
                 status = write(mem_holder, addr, st.st_size);
                 if (status == -1) {
                     perror("write to memfd failed");
