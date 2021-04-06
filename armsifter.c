@@ -10,15 +10,87 @@
 #include <linux/memfd.h>
 #include <sys/wait.h>
 #include <sys/stat.h>
+#include <errno.h>
+#include <stdarg.h>
+#include <sys/wait.h>
 
-#define MEM_PATH "/proc/self/fd/%i"
+#define MEM_PATH "/proc/%lu/fd/%i"
 
 #define IDX_FILE "start_idx"
 
 unsigned int deny_list[] = { 
     0xebfffffe, 
-    0xabfffffe 
+    0xabfffffe
 };
+// https://gist.github.com/goblinhack/ca81294d76228de61d5199891a6abcc9
+int
+execl_timed (int timeout_ms,
+             int poll_ms,
+             const char *cmd, ...)
+{
+    pid_t child_pid;
+    char *args[100];
+    char *arg;
+    const int maxargs = sizeof(args) / sizeof(args[0]);
+    int argno = 0;
+    va_list ap;
+    int status;
+    int cnt = 0;
+    int w;
+
+    va_start(ap, cmd);
+
+    args[argno++] = (char*) cmd;
+    while (argno < maxargs) {
+        arg = va_arg(ap, char *);
+        args[argno++] = arg;
+        if (!arg) {
+            break;
+        }
+    }
+    va_end(ap);
+
+    if (!argno || (argno >= maxargs)) {
+        return (EINVAL);
+    }
+
+    if ((child_pid = fork()) == 0) {
+        /*
+         * child
+         */
+        execv(cmd, args);
+        _exit(EXIT_FAILURE);
+    }
+
+    if (child_pid <= 0) {
+        return (ENOMEM);
+    }
+
+    /*
+     * parent
+     */
+    do {
+        /*
+         * Do not want to rely on signals as that could modify
+         * the behavior of the invoking application.
+         */
+        w = waitpid(child_pid, &status, WNOHANG);
+        if (w == -1) {
+            return (EINVAL);
+        }
+
+        usleep(poll_ms);
+
+        if (w) {
+            if (WIFEXITED(status)) {
+                return (WEXITSTATUS(status));
+            }
+        }
+    } while (cnt++ < (timeout_ms / poll_ms));
+
+    printf("\nTimed out!\n");
+    return (ETIMEDOUT);
+}
 
 int find_index(char *data, size_t len) {
     size_t j = (len + (2 - 1)) / 2;
@@ -70,6 +142,7 @@ int main(int argc, char * argv[]) {
     to_exec = malloc(32);
     pid_t child;
     struct stat st;
+    pid_t pid = getpid();
 
     while ((c = getopt (argc, argv, "s:e:")) != -1) {
         switch (c) {
@@ -177,10 +250,9 @@ int main(int argc, char * argv[]) {
                     return 1;
                 }
 
-                sprintf(to_exec, MEM_PATH, mem_holder);
+                sprintf(to_exec, MEM_PATH, pid, mem_holder);
                 // printf("Executing: %s\n", to_exec);
-                if (execl(to_exec, NULL) == -1) {
-                   
+                if (execl_timed(2500, 100, to_exec, NULL) == -1) {
                 } 
                 return 0;
             } else {
@@ -192,7 +264,7 @@ int main(int argc, char * argv[]) {
         }
     }   
     
-    printf("Ending run\n");
+    printf("\nEnding run\n");
     close(template);
     free(to_exec);
     return 0;
