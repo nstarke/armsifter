@@ -210,7 +210,7 @@ int main(int argc, char * argv[]) {
 
     printf("Starting at position: %x\nEnding at position: %x\n", pos_start, pos_end);
     
-    for (unsigned int i = pos_start; i < pos_end; i++) {
+    for (unsigned int i = pos_start; i <= pos_end; i++) {
         if (i % 256 == 0){
             printf("\rNow Executing: %x", i);
         }
