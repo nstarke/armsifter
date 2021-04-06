@@ -14,14 +14,10 @@
 #include <stdarg.h>
 #include <sys/wait.h>
 
-#define MEM_PATH "/proc/%lu/fd/%i"
+#define MEM_PATH "/proc/self/fd/%i"
 
 #define IDX_FILE "start_idx"
 
-unsigned int deny_list[] = { 
-    0xebfffffe, 
-    0xabfffffe
-};
 // https://gist.github.com/goblinhack/ca81294d76228de61d5199891a6abcc9
 int
 execl_timed (int timeout_ms,
@@ -142,7 +138,6 @@ int main(int argc, char * argv[]) {
     to_exec = malloc(32);
     pid_t child;
     struct stat st;
-    pid_t pid = getpid();
 
     while ((c = getopt (argc, argv, "s:e:")) != -1) {
         switch (c) {
@@ -220,19 +215,6 @@ int main(int argc, char * argv[]) {
             printf("\rNow Executing: %x", i);
         }
 
-        int found = 0;
-        for (int j = 0; j < sizeof(deny_list) / sizeof(int); j++ ) {
-            if (i == deny_list[j]) {
-                printf("Deny List: %x\n", deny_list[j]);
-                found = 1;
-                break;
-            }
-        }
-
-        if (found == 1) {
-            continue;
-        }
-
         child = fork();
        
         if (child >= 0) {
@@ -250,7 +232,7 @@ int main(int argc, char * argv[]) {
                     return 1;
                 }
 
-                sprintf(to_exec, MEM_PATH, pid, mem_holder);
+                sprintf(to_exec, MEM_PATH, mem_holder);
                 // printf("Executing: %s\n", to_exec);
                 if (execl_timed(2500, 100, to_exec, NULL) == -1) {
                 } 
