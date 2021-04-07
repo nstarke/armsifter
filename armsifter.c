@@ -83,8 +83,11 @@ execl_timed (int timeout_ms,
             }
         }
     } while (cnt++ < (timeout_ms / poll_ms));
-
+    
     printf("\nTimed out!\n");
+    
+    kill(child_pid, 9);
+
     return (ETIMEDOUT);
 }
 
