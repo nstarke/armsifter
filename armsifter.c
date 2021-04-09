@@ -119,6 +119,24 @@ int write_idx_file(unsigned int idx) {
     return 0;
 }
 
+int check_dmesg_output() {
+    char * dmesg_command = "dmesg | grep -i Backtrace";    
+    FILE * fp = popen(dmesg_command, "r");
+    int output_len = 0;
+    int ch;
+
+    if (!fp) {
+        perror("cannot popen");
+        return -1;
+    }
+
+    while((ch = fgetc(fp)) != EOF) {
+        output_len++;
+    }
+
+    return output_len;
+}
+
 int main(int argc, char * argv[]) {
     int c;
     int idx;
@@ -127,6 +145,7 @@ int main(int argc, char * argv[]) {
     int end_provied = 0;
     char *addr;
     int template;
+    int check_dmesg = 0;
     unsigned int pos_start = 0;
     unsigned int pos_end = 0;
     char position_value[9];
@@ -138,10 +157,13 @@ int main(int argc, char * argv[]) {
     csh handle;
 	cs_insn *insn;
 	size_t count;
-    char instruction[5];    
+    char instruction[5];
 
-    while ((c = getopt (argc, argv, "s:e:")) != -1) {
+    while ((c = getopt (argc, argv, "cs:e:")) != -1) {
         switch (c) {
+            case 'c':
+                check_dmesg = 1;
+                break;
             case 's':
                 start_provided = 1;
                 pos_start = strtoul(optarg, NULL, 16);
@@ -249,6 +271,13 @@ int main(int argc, char * argv[]) {
 
                     if (execl_timed(2500, 100, to_exec, NULL) == -1) {
                     } 
+                    if (check_dmesg){
+                        int r = check_dmesg_output();
+                        if (r > 0){
+                            printf("Dmesg returned Backtrace: %x", i);
+                            exit(0);
+                        }
+                    }
                     return 0;
                 } else {
                     wait(NULL);
