@@ -13,17 +13,14 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <sys/wait.h>
+#include <capstone/capstone.h>
 
 #define MEM_PATH "/proc/self/fd/%i"
 
 #define IDX_FILE "start_idx"
 
 // https://gist.github.com/goblinhack/ca81294d76228de61d5199891a6abcc9
-int
-execl_timed (int timeout_ms,
-             int poll_ms,
-             const char *cmd, ...)
-{
+int execl_timed (int timeout_ms, int poll_ms, const char *cmd, ...) {
     pid_t child_pid;
     char *args[100];
     char *arg;
@@ -33,6 +30,7 @@ execl_timed (int timeout_ms,
     int status;
     int cnt = 0;
     int w;
+
 
     va_start(ap, cmd);
 
@@ -66,10 +64,6 @@ execl_timed (int timeout_ms,
      * parent
      */
     do {
-        /*
-         * Do not want to rely on signals as that could modify
-         * the behavior of the invoking application.
-         */
         w = waitpid(child_pid, &status, WNOHANG);
         if (w == -1) {
             return (EINVAL);
@@ -141,6 +135,10 @@ int main(int argc, char * argv[]) {
     to_exec = malloc(32);
     pid_t child;
     struct stat st;
+    csh handle;
+	cs_insn *insn;
+	size_t count;
+    char instruction[5];    
 
     while ((c = getopt (argc, argv, "s:e:")) != -1) {
         switch (c) {
@@ -212,44 +210,62 @@ int main(int argc, char * argv[]) {
     }
 
     printf("Starting at position: %x\nEnding at position: %x\n", pos_start, pos_end);
-    
+
+	if (cs_open(CS_ARCH_ARM, CS_MODE_ARM + CS_MODE_LITTLE_ENDIAN, &handle) != CS_ERR_OK) {
+        printf("Could not open Captsone\n");
+        return -1;
+    }
+		
     for (unsigned int i = pos_start; i <= pos_end; i++) {
-        if (i % 256 == 0){
-            printf("\rNow Executing: %x", i);
-        }
+      
+        instruction[3] = (i >> 24) & 0xff;
+        instruction[2] = (i >> 16) & 0xff;
+        instruction[1] = (i >> 8) & 0xff;
+        instruction[0] = i & 0xff;
 
-        child = fork();
-       
-        if (child >= 0) {
-            if (child == 0) {
-                mem_holder = syscall(SYS_memfd_create, "", MFD_CLOEXEC);
-                if (mem_holder == -1) {
-                    perror("memfd_Create failed");
-                    return 1;
-                }
-               
-                memcpy(addr + idx, &i, 4);
-                status = write(mem_holder, addr, st.st_size);
-                if (status == -1) {
-                    perror("write to memfd failed");
-                    return 1;
-                }
+        count = cs_disasm(handle, instruction, 4, 0, 0, &insn);
 
-                sprintf(to_exec, MEM_PATH, mem_holder);
-                // printf("Executing: %s\n", to_exec);
-                if (execl_timed(2500, 100, to_exec, NULL) == -1) {
+        if (count <= 0) {
+            cs_free(insn, count);
+            child = fork();
+            if (child >= 0) {
+                if (child == 0) {
+                    mem_holder = syscall(SYS_memfd_create, "", MFD_CLOEXEC);
+                    if (mem_holder == -1) {
+                        perror("memfd_Create failed");
+                        return 1;
+                    }
+                
+                    memcpy(addr + idx, &i, 4);
+                    status = write(mem_holder, addr, st.st_size);
+                    if (status == -1) {
+                        perror("write to memfd failed");
+                        return 1;
+                    }
+
+                    sprintf(to_exec, MEM_PATH, mem_holder);
+
+                    printf("\rNow Executing: %x", i);
+
+                    if (execl_timed(2500, 100, to_exec, NULL) == -1) {
+                    } 
+                    return 0;
+                } else {
+                    wait(NULL);
                 } 
-                return 0;
             } else {
-                wait(NULL);
-            } 
-        } else {
-            perror("Fork failed");
-            return 1;
+                perror("Fork failed");
+                return 1;
+            }
+        }  else {
+           // do something if disassemble succeeds?
+            cs_free(insn, count);
         }
-    }   
+    }
+
     
     printf("\nEnding run\n");
+    cs_close(&handle);
     close(template);
     free(to_exec);
     return 0;
