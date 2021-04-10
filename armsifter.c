@@ -156,6 +156,7 @@ int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr
     printf("\rNow Executing: %x", instr);
 
     if (execl_timed(2500, 100, to_exec, NULL) == -1) {
+        // do something if execl died?
     }
     
     if (check_dmesg){
@@ -165,8 +166,8 @@ int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr
             exit(0);
         }
     }
+
     return 0;
-   
 }
 
 int main(int argc, char * argv[]) {
@@ -284,7 +285,6 @@ int main(int argc, char * argv[]) {
     for (unsigned int i = pos_start; i <= pos_end; i++) {
         
         if (use_capstone == 1) {
-            
             instruction[3] = (i >> 24) & 0xff;
             instruction[2] = (i >> 16) & 0xff;
             instruction[1] = (i >> 8) & 0xff;
@@ -301,7 +301,6 @@ int main(int argc, char * argv[]) {
             inject_instruction(check_dmesg, addr, idx, i, st, mem_holder);
         }
     }
-
     
     printf("\nEnding run\n");
     cs_close(&handle);
