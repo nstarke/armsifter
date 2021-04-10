@@ -205,10 +205,12 @@ void check_and_write_elf_file() {
     for (int i = 0; i < harness_len + 1; i++){
         buf[i] = harness_file[i];
     }
+
     snprintf(buf, harness_len + 1, "%s", harness_file);
     status = stat(HARNESS_FILE, &st);
-    printf("status: %d\n", status);
+    
     if (status == -1 || st.st_size == 0){
+        printf("Writing harness file\n");
         harness = fopen(HARNESS_FILE, "wb");
         fwrite(buf, harness_len, 1, harness);
         fclose(harness);
@@ -261,7 +263,6 @@ int main(int argc, char * argv[]) {
     check_and_write_elf_file();
 
     status = stat(HARNESS_FILE, &st);
-
     if (status != 0) {
         perror("stat failed");
         return 1;
@@ -281,7 +282,6 @@ int main(int argc, char * argv[]) {
     }
 
     addr = mmap(NULL, st.st_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, template, 0);
-
     if (addr == MAP_FAILED) {
         perror("mmap failed");
         return 1;
