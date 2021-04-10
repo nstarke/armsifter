@@ -134,10 +134,43 @@ int check_dmesg_output() {
         output_len++;
     }
 
+    pclose(fp);
     return output_len;
 }
 
+int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr, struct stat st, int mem_holder) {
+    int status;
+    char to_exec[32];
+    
+    memcpy(addr + idx, &instr, 4);
+
+    status = write(mem_holder, addr, st.st_size);
+
+    if (status == -1) {
+        perror("write to memfd failed");
+        return 1;
+    }
+
+    sprintf(to_exec, MEM_PATH, mem_holder);
+
+    printf("\rNow Executing: %x", instr);
+
+    if (execl_timed(2500, 100, to_exec, NULL) == -1) {
+    }
+    
+    if (check_dmesg){
+        int r = check_dmesg_output();
+        if (r > 0){
+            printf("Dmesg returned Backtrace: %x", instr);
+            exit(0);
+        }
+    }
+    return 0;
+   
+}
+
 int main(int argc, char * argv[]) {
+    int use_capstone = 0;
     int c;
     int idx;
     int status;
@@ -149,18 +182,19 @@ int main(int argc, char * argv[]) {
     unsigned int pos_start = 0;
     unsigned int pos_end = 0;
     char position_value[9];
-    int mem_holder;
-    char * to_exec;
-    to_exec = malloc(32);
-    pid_t child;
     struct stat st;
     csh handle;
 	cs_insn *insn;
 	size_t count;
+    pid_t child;
     char instruction[5];
+    int mem_holder;
 
-    while ((c = getopt (argc, argv, "cs:e:")) != -1) {
+    while ((c = getopt (argc, argv, "acs:e:")) != -1) {
         switch (c) {
+            case 'a':
+                use_capstone = 1;
+                break;
             case 'c':
                 check_dmesg = 1;
                 break;
@@ -233,62 +267,38 @@ int main(int argc, char * argv[]) {
 
     printf("Starting at position: %x\nEnding at position: %x\n", pos_start, pos_end);
 
-	if (cs_open(CS_ARCH_ARM, CS_MODE_ARM + CS_MODE_LITTLE_ENDIAN, &handle) != CS_ERR_OK) {
-        printf("Could not open Captsone\n");
+	if (use_capstone == 1 && cs_open(CS_ARCH_ARM, CS_MODE_ARM + CS_MODE_LITTLE_ENDIAN, &handle) != CS_ERR_OK) {
+        printf("Could not open Capstone\n");
         return -1;
     }
 		
+    mem_holder = syscall(SYS_memfd_create, "", MFD_CLOEXEC);
+    if (mem_holder == -1) {
+        perror("memfd_create failed");
+        return 1;
+    }
+
+    printf("use_capstone: %d\n", use_capstone);
+    printf("check_dmesg: %d\n", check_dmesg);
+    
     for (unsigned int i = pos_start; i <= pos_end; i++) {
-      
-        instruction[3] = (i >> 24) & 0xff;
-        instruction[2] = (i >> 16) & 0xff;
-        instruction[1] = (i >> 8) & 0xff;
-        instruction[0] = i & 0xff;
+        
+        if (use_capstone == 1) {
+            
+            instruction[3] = (i >> 24) & 0xff;
+            instruction[2] = (i >> 16) & 0xff;
+            instruction[1] = (i >> 8) & 0xff;
+            instruction[0] = i & 0xff;
 
-        count = cs_disasm(handle, instruction, 4, 0, 0, &insn);
+            count = cs_disasm(handle, instruction, 4, 0, 0, &insn);
+            if (count <= 0) {
+                inject_instruction(check_dmesg, addr, idx, i, st, mem_holder);
+            }  
 
-        if (count <= 0) {
             cs_free(insn, count);
-            child = fork();
-            if (child >= 0) {
-                if (child == 0) {
-                    mem_holder = syscall(SYS_memfd_create, "", MFD_CLOEXEC);
-                    if (mem_holder == -1) {
-                        perror("memfd_Create failed");
-                        return 1;
-                    }
-                
-                    memcpy(addr + idx, &i, 4);
-                    status = write(mem_holder, addr, st.st_size);
-                    if (status == -1) {
-                        perror("write to memfd failed");
-                        return 1;
-                    }
 
-                    sprintf(to_exec, MEM_PATH, mem_holder);
-
-                    printf("\rNow Executing: %x", i);
-
-                    if (execl_timed(2500, 100, to_exec, NULL) == -1) {
-                    } 
-                    if (check_dmesg){
-                        int r = check_dmesg_output();
-                        if (r > 0){
-                            printf("Dmesg returned Backtrace: %x", i);
-                            exit(0);
-                        }
-                    }
-                    return 0;
-                } else {
-                    wait(NULL);
-                } 
-            } else {
-                perror("Fork failed");
-                return 1;
-            }
-        }  else {
-           // do something if disassemble succeeds?
-            cs_free(insn, count);
+        } else {
+            inject_instruction(check_dmesg, addr, idx, i, st, mem_holder);
         }
     }
 
@@ -296,6 +306,5 @@ int main(int argc, char * argv[]) {
     printf("\nEnding run\n");
     cs_close(&handle);
     close(template);
-    free(to_exec);
     return 0;
 }
