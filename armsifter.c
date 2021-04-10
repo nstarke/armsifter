@@ -138,9 +138,8 @@ int check_dmesg_output() {
     return output_len;
 }
 
-int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr, struct stat st, int mem_holder) {
+int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr, struct stat st, int mem_holder, char * to_exec) {
     int status;
-    char to_exec[32];
     
     memcpy(addr + idx, &instr, 4);
 
@@ -150,8 +149,6 @@ int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr
         perror("write to memfd failed");
         return 1;
     }
-
-    sprintf(to_exec, MEM_PATH, mem_holder);
 
     printf("\rNow Executing: %x", instr);
 
@@ -190,6 +187,7 @@ int main(int argc, char * argv[]) {
     pid_t child;
     char instruction[5];
     int mem_holder;
+    char to_exec[32];
 
     while ((c = getopt (argc, argv, "acs:e:")) != -1) {
         switch (c) {
@@ -279,8 +277,9 @@ int main(int argc, char * argv[]) {
         return 1;
     }
 
-    printf("use_capstone: %d\n", use_capstone);
-    printf("check_dmesg: %d\n", check_dmesg);
+    sprintf(to_exec, MEM_PATH, mem_holder);
+
+    printf("use_capstone: %d\ncheck_dmesg: %d\n", use_capstone, check_dmesg);
     
     for (unsigned int i = pos_start; i <= pos_end; i++) {
         
@@ -292,13 +291,13 @@ int main(int argc, char * argv[]) {
 
             count = cs_disasm(handle, instruction, 4, 0, 0, &insn);
             if (count <= 0) {
-                inject_instruction(check_dmesg, addr, idx, i, st, mem_holder);
+                inject_instruction(check_dmesg, addr, idx, i, st, mem_holder, to_exec);
             }  
 
             cs_free(insn, count);
 
         } else {
-            inject_instruction(check_dmesg, addr, idx, i, st, mem_holder);
+            inject_instruction(check_dmesg, addr, idx, i, st, mem_holder, to_exec);
         }
     }
     
