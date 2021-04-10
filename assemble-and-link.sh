@@ -1,3 +1,3 @@
 #!/bin/bash
-as -o hello.o hello.S
-ld hello.o -o hello -s
+as -o harness.o harness.S
+ld harness.o -o harness -s
