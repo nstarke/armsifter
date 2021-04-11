@@ -133,7 +133,7 @@ int find_index(char *data, size_t len) {
 int check_idx_file() {
     unsigned int file_data;
     if (access(IDX_FILE, F_OK) == 0) {
-        FILE *f = fopen(IDX_FILE, "r");    
+        FILE *f = fopen(IDX_FILE, "rb");    
         fread(&file_data, sizeof(int), 1, f);
         fclose(f);
         return file_data;
@@ -143,7 +143,7 @@ int check_idx_file() {
 }
 
 int write_idx_file(unsigned int idx) {
-    FILE * f = fopen(IDX_FILE, "w");
+    FILE * f = fopen(IDX_FILE, "wb");
     fwrite(&idx, sizeof(int), 1, f); 
     fclose(f);
     return 0;
@@ -168,13 +168,23 @@ int check_dmesg_output() {
     return output_len;
 }
 
-int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr, size_t size, int mem_holder, char * to_exec) {
+int inject_instruction(int check_dmesg, int * addr, int idx, unsigned int instr, size_t size, pid_t current_pid) {
     int status;
-    
-    memcpy(addr + idx, &instr, 4);
+    int mem_holder;
+    char to_exec[32];
 
-    status = write(mem_holder, addr, size);
+    mem_holder = syscall(SYS_memfd_create, "", MFD_CLOEXEC);
+    if (mem_holder == -1) {
+        perror("memfd_create failed");
+        return 1;
+    }
 
+    sprintf(to_exec, MEM_PATH, current_pid, mem_holder);
+    // overwrite idx with new instruction
+    memcpy(harness_file + idx, &instr, 4);
+    // sync instruction to disk via mmap
+    memcpy(addr, harness_file, size);
+    status = write(mem_holder, harness_file, size);
     if (status == -1) {
         perror("write to memfd failed");
         return 1;
@@ -193,7 +203,7 @@ int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr
             exit(0);
         }
     }
-
+    close(mem_holder);
     return 0;
 }
 
@@ -224,7 +234,7 @@ int main(int argc, char * argv[]) {
     int status;
     int start_provided = 0;
     int end_provied = 0;
-    char *addr;
+    int *addr;
     int template;
     int check_dmesg = 0;
     unsigned int pos_start = 0;
@@ -236,9 +246,6 @@ int main(int argc, char * argv[]) {
 	size_t count;
     pid_t child;
     char instruction[5];
-    int mem_holder;
-    char to_exec[32];
-
     pid_t current_pid = getpid();
 
     while ((c = getopt (argc, argv, "acs:e:")) != -1) {
@@ -275,7 +282,7 @@ int main(int argc, char * argv[]) {
         return 1;
     }
 
-    printf("Begin Process\n");
+    printf("Begin Process\nharness file size: %d\n", st.st_size);
 
     template = open(HARNESS_FILE, O_RDWR);
     if (template == -1) {
@@ -284,6 +291,7 @@ int main(int argc, char * argv[]) {
     }
 
     addr = mmap(NULL, st.st_size, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED, template, 0);
+   
     if (addr == MAP_FAILED) {
         perror("mmap failed");
         return 1;
@@ -291,7 +299,7 @@ int main(int argc, char * argv[]) {
 
     idx = check_idx_file();
     if (idx == -1){
-        idx = find_index(addr, st.st_size);
+        idx = find_index(harness_file, st.st_size);
 
         if (idx == 0) {
             printf("offset not found - assemble and link 'harness'?\n");
@@ -323,15 +331,7 @@ int main(int argc, char * argv[]) {
         return -1;
     }
 		
-    mem_holder = syscall(SYS_memfd_create, "", MFD_CLOEXEC);
-    if (mem_holder == -1) {
-        perror("memfd_create failed");
-        return 1;
-    }
-
-    sprintf(to_exec, MEM_PATH, current_pid, mem_holder);
-
-    printf("exec path: %s\nuse_capstone: %d\ncheck_dmesg: %d\n", to_exec, use_capstone, check_dmesg);
+    printf("use_capstone: %d\ncheck_dmesg: %d\n", use_capstone, check_dmesg);
     
     for (unsigned int i = pos_start; i <= pos_end; i++) {
         
@@ -344,13 +344,13 @@ int main(int argc, char * argv[]) {
             count = cs_disasm(handle, instruction, 4, 0, 0, &insn);
             if (count <= 0) {
                 cs_free(insn, count);
-                inject_instruction(check_dmesg, addr, idx, i, st.st_size, mem_holder, to_exec);
+                inject_instruction(check_dmesg, addr, idx, i, st.st_size, current_pid);
             }  else {
                 cs_free(insn, count);
             }
 
         } else {
-            inject_instruction(check_dmesg, addr, idx, i, st.st_size, mem_holder, to_exec);
+            inject_instruction(check_dmesg, addr, idx, i, st.st_size, current_pid);
         }
     }
     
