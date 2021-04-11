@@ -15,7 +15,7 @@
 #include <sys/wait.h>
 #include <capstone/capstone.h>
 
-#define MEM_PATH "/proc/self/fd/%i"
+#define MEM_PATH "/proc/%ld/fd/%i"
 #define HARNESS_FILE "harness"
 #define IDX_FILE "start_idx"
 
@@ -78,6 +78,7 @@ int execl_timed (int timeout_ms, int poll_ms, const char *cmd, ...) {
     if (!argno || (argno >= maxargs)) {
         return (EINVAL);
     }
+
     child_pid = fork();
     if (child_pid == 0) {
         /*
@@ -185,7 +186,7 @@ int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr
         // do something if execl died?
     }
     
-    if (check_dmesg){
+    if (check_dmesg == 1){
         int r = check_dmesg_output();
         if (r > 0){
             printf("Dmesg returned Backtrace: %x", instr);
@@ -237,6 +238,8 @@ int main(int argc, char * argv[]) {
     char instruction[5];
     int mem_holder;
     char to_exec[32];
+
+    pid_t current_pid = getpid();
 
     while ((c = getopt (argc, argv, "acs:e:")) != -1) {
         switch (c) {
@@ -326,9 +329,9 @@ int main(int argc, char * argv[]) {
         return 1;
     }
 
-    sprintf(to_exec, MEM_PATH, mem_holder);
+    sprintf(to_exec, MEM_PATH, current_pid, mem_holder);
 
-    printf("use_capstone: %d\ncheck_dmesg: %d\n", use_capstone, check_dmesg);
+    printf("exec path: %s\nuse_capstone: %d\ncheck_dmesg: %d\n", to_exec, use_capstone, check_dmesg);
     
     for (unsigned int i = pos_start; i <= pos_end; i++) {
         
@@ -340,10 +343,11 @@ int main(int argc, char * argv[]) {
 
             count = cs_disasm(handle, instruction, 4, 0, 0, &insn);
             if (count <= 0) {
+                cs_free(insn, count);
                 inject_instruction(check_dmesg, addr, idx, i, st.st_size, mem_holder, to_exec);
-            }  
-
-            cs_free(insn, count);
+            }  else {
+                cs_free(insn, count);
+            }
 
         } else {
             inject_instruction(check_dmesg, addr, idx, i, st.st_size, mem_holder, to_exec);
@@ -351,6 +355,7 @@ int main(int argc, char * argv[]) {
     }
     
     printf("\nEnding run\n");
+    free(addr);
     cs_close(&handle);
     close(template);
     return 0;
