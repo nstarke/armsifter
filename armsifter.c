@@ -110,6 +110,8 @@ int execl_timed (int timeout_ms, int poll_ms, const char *cmd, ...) {
         }
     } while (cnt++ < (timeout_ms / poll_ms));
     
+    kill(child_pid, 9);
+
     printf("\nTimed out! Pid: %d\n", child_pid);
 
     return (ETIMEDOUT);
@@ -168,7 +170,7 @@ int check_dmesg_output() {
     return output_len;
 }
 
-int inject_instruction(int check_dmesg, int * addr, int idx, unsigned int instr, size_t size, pid_t current_pid) {
+int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr, size_t size, pid_t current_pid) {
     int status;
     int mem_holder;
     char to_exec[32];
@@ -184,6 +186,7 @@ int inject_instruction(int check_dmesg, int * addr, int idx, unsigned int instr,
     memcpy(harness_file + idx, &instr, 4);
     // sync instruction to disk via mmap
     memcpy(addr, harness_file, size);
+    // write to memfd
     status = write(mem_holder, harness_file, size);
     if (status == -1) {
         perror("write to memfd failed");
@@ -234,7 +237,7 @@ int main(int argc, char * argv[]) {
     int status;
     int start_provided = 0;
     int end_provied = 0;
-    int *addr;
+    char *addr;
     int template;
     int check_dmesg = 0;
     unsigned int pos_start = 0;
@@ -315,7 +318,6 @@ int main(int argc, char * argv[]) {
     printf("idx: %x\n", idx);
 
     sprintf(position_value, "%02X%02X%02X%02X", addr[idx+3], addr[idx+2], addr[idx+1], addr[idx]);
-
     if (start_provided == 0) {
         pos_start = strtoul(position_value, NULL, 16);
     }
@@ -355,7 +357,7 @@ int main(int argc, char * argv[]) {
     }
     
     printf("\nEnding run\n");
-    free(addr);
+    munmap(addr, st.st_size);
     cs_close(&handle);
     close(template);
     return 0;
