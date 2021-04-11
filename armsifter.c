@@ -47,6 +47,7 @@ unsigned char harness_file[] = {
   0x76, 0x00, 0x00, 0x00, 0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
   0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
+
 unsigned int harness_len = 312;
 
 // https://gist.github.com/goblinhack/ca81294d76228de61d5199891a6abcc9
@@ -77,16 +78,16 @@ int execl_timed (int timeout_ms, int poll_ms, const char *cmd, ...) {
     if (!argno || (argno >= maxargs)) {
         return (EINVAL);
     }
-
-    if ((child_pid = fork()) == 0) {
+    child_pid = fork();
+    if (child_pid == 0) {
         /*
          * child
          */
-        execv(cmd, args);
-        _exit(EXIT_FAILURE);
+        execl(cmd, NULL);
+        _exit(0);
     }
 
-    if (child_pid <= 0) {
+    if (child_pid < 0) {
         return (ENOMEM);
     }
 
@@ -102,15 +103,13 @@ int execl_timed (int timeout_ms, int poll_ms, const char *cmd, ...) {
         usleep(poll_ms);
 
         if (w) {
-            if (WIFEXITED(status)) {
+            if (WIFEXITED(status) || WCOREDUMP(status)) {
                 return (WEXITSTATUS(status));
             }
         }
     } while (cnt++ < (timeout_ms / poll_ms));
     
-    printf("\nTimed out!\n");
-    
-    kill(child_pid, 9);
+    printf("\nTimed out! Pid: %d\n", child_pid);
 
     return (ETIMEDOUT);
 }
@@ -168,12 +167,12 @@ int check_dmesg_output() {
     return output_len;
 }
 
-int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr, struct stat st, int mem_holder, char * to_exec) {
+int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr, size_t size, int mem_holder, char * to_exec) {
     int status;
     
     memcpy(addr + idx, &instr, 4);
 
-    status = write(mem_holder, addr, st.st_size);
+    status = write(mem_holder, addr, size);
 
     if (status == -1) {
         perror("write to memfd failed");
@@ -341,13 +340,13 @@ int main(int argc, char * argv[]) {
 
             count = cs_disasm(handle, instruction, 4, 0, 0, &insn);
             if (count <= 0) {
-                inject_instruction(check_dmesg, addr, idx, i, st, mem_holder, to_exec);
+                inject_instruction(check_dmesg, addr, idx, i, st.st_size, mem_holder, to_exec);
             }  
 
             cs_free(insn, count);
 
         } else {
-            inject_instruction(check_dmesg, addr, idx, i, st, mem_holder, to_exec);
+            inject_instruction(check_dmesg, addr, idx, i, st.st_size, mem_holder, to_exec);
         }
     }
     
