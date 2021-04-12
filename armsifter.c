@@ -51,33 +51,11 @@ unsigned char harness_file[] = {
 unsigned int harness_len = 312;
 
 // https://gist.github.com/goblinhack/ca81294d76228de61d5199891a6abcc9
-int execl_timed (int timeout_ms, int poll_ms, const char *cmd, ...) {
+int execl_timed (int timeout_ms, int poll_ms, const char *cmd, unsigned int instruction) {
     pid_t child_pid;
-    char *args[100];
-    char *arg;
-    const int maxargs = sizeof(args) / sizeof(args[0]);
-    int argno = 0;
-    va_list ap;
     int status;
     int cnt = 0;
     int w;
-
-
-    va_start(ap, cmd);
-
-    args[argno++] = (char*) cmd;
-    while (argno < maxargs) {
-        arg = va_arg(ap, char *);
-        args[argno++] = arg;
-        if (!arg) {
-            break;
-        }
-    }
-    va_end(ap);
-
-    if (!argno || (argno >= maxargs)) {
-        return (EINVAL);
-    }
 
     child_pid = fork();
     if (child_pid == 0) {
@@ -112,7 +90,7 @@ int execl_timed (int timeout_ms, int poll_ms, const char *cmd, ...) {
     
     kill(child_pid, 9);
 
-    printf("\nTimed out! Pid: %d\n", child_pid);
+    printf("\nTimed out! Pid: %d - Instruction: %x\n", child_pid, instruction);
 
     return (ETIMEDOUT);
 }
@@ -195,7 +173,7 @@ int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr
 
     printf("\rNow Executing: %x", instr);
 
-    if (execl_timed(2500, 100, to_exec, NULL) == -1) {
+    if (execl_timed(2500, 100, to_exec, instr) == -1) {
         // do something if execl died?
     }
     
