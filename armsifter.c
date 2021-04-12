@@ -202,7 +202,7 @@ int inject_instruction(int check_dmesg, char * addr, int idx, unsigned int instr
     if (check_dmesg == 1){
         int r = check_dmesg_output();
         if (r > 0){
-            printf("Dmesg returned Backtrace: %x", instr);
+            printf("\nDmesg returned Backtrace: %x\n", instr);
             exit(0);
         }
     }
